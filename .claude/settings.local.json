@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PYTHONPATH=c:\\\\Users\\\\User\\\\devseo\\\\backend \"./venv/Scripts/python.exe\" -m alembic upgrade:*)"
+    ]
+  }
+}
