@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: devseo-api
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: ./build.sh
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: devseo-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: devseo-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+    healthCheckPath: /health
+
+databases:
+  - name: devseo-db
+    databaseName: devseo
+    user: devseo
+    plan: free
+    region: oregon
+
+  - name: devseo-redis
+    plan: free
+    region: oregon
