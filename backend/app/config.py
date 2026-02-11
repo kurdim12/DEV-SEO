@@ -37,8 +37,21 @@ class Settings(BaseSettings):
     REDIS_CACHE_TTL: int = 3600  # 1 hour
 
     # CORS - Will be set dynamically based on DEBUG mode
-    CORS_ORIGINS_DEV: list[str] = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]
-    CORS_ORIGINS_PROD: list[str] = ["https://devseo.io", "https://www.devseo.io", "https://app.devseo.io"]
+    CORS_ORIGINS_DEV: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:5173",  # Vite default port
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "https://lovable.dev",
+        "https://*.lovable.dev",  # Lovable preview URLs
+    ]
+    CORS_ORIGINS_PROD: list[str] = [
+        "https://devseo.io",
+        "https://www.devseo.io",
+        "https://app.devseo.io",
+        "https://insight-navigator.lovable.app",  # Lovable production URL
+    ]
 
     @property
     def CORS_ORIGINS(self) -> list[str]:
