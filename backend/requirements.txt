@@ -65,3 +65,7 @@ pyarabic==0.6.15          # Arabic NLP
 textstat==0.7.12          # Readability scoring
 openai==1.59.7            # Future AI features
 slowapi==0.1.9            # Rate limiting
+
+# COMPETITIVE EDGE features
+playwright==1.48.0        # JS rendering diagnostics
+beautifulsoup4==4.12.3    # Already listed above (HTML parsing)

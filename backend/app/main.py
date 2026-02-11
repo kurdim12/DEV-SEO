@@ -137,12 +137,15 @@ async def root() -> dict:
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 
 # Import additional routers
-from app.routers import websites, crawls, dashboard, content
+from app.routers import websites, crawls, dashboard, content, competitive_edge
 
 app.include_router(websites.router, prefix=settings.API_V1_PREFIX)
 app.include_router(crawls.router, prefix=settings.API_V1_PREFIX)
 app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
 app.include_router(content.router, prefix=settings.API_V1_PREFIX)
+
+# COMPETITIVE EDGE FEATURES - What makes us unique
+app.include_router(competitive_edge.router)  # Already has /api/v1/analysis prefix
 
 # Additional routers will be added here as we build them:
 # app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
