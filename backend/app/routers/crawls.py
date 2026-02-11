@@ -7,10 +7,12 @@ from datetime import datetime, timezone
 import csv
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.dependencies import get_current_user_clerk
@@ -29,9 +31,12 @@ from app.schemas.recommendation import (
 from app.services.crawler import WebCrawler
 from app.services.seo_analyzer import SEOAnalyzer
 from app.services.ai_service import AIService
+from app.services.email_service import email_service
 from app.config import settings
+from app.tasks.crawl_tasks import process_crawl_job
 
 router = APIRouter(prefix="/crawls", tags=["Crawls"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _get_plan_limits(plan: str) -> dict:
@@ -274,6 +279,30 @@ async def run_crawl_job(
 
             await db.commit()
 
+            # Send email notification
+            try:
+                await db.refresh(crawl_job, ["website"])
+                await db.refresh(crawl_job.website, ["user"])
+
+                if crawl_job.website.user.email:
+                    # Calculate stats
+                    avg_score = sum(p.seo_score for p in page_results if p.seo_score) / len(page_results) if page_results else 0
+                    total_issues = sum(len(p.issues or []) for p in page_results)
+
+                    report_url = f"{settings.FRONTEND_URL}/reports/{crawl_job_id}" if hasattr(settings, 'FRONTEND_URL') else f"https://app.devseo.io/reports/{crawl_job_id}"
+
+                    await email_service.send_scan_complete(
+                        to_email=crawl_job.website.user.email,
+                        website_url=website_domain,
+                        score=int(avg_score),
+                        total_pages=len(page_results),
+                        total_issues=total_issues,
+                        report_url=report_url
+                    )
+                    logger.info(f"📧 Sent completion email to {crawl_job.website.user.email}")
+            except Exception as email_error:
+                logger.error(f"Failed to send completion email: {email_error}")
+
         except asyncio.CancelledError:
             logger.info(f"🛑 Crawl job {crawl_job_id} was cancelled")
             # Update status to cancelled
@@ -293,6 +322,21 @@ async def run_crawl_job(
             crawl_job.completed_at = datetime.now(timezone.utc)
             await db.commit()
 
+            # Send failure email notification
+            try:
+                await db.refresh(crawl_job, ["website"])
+                await db.refresh(crawl_job.website, ["user"])
+
+                if crawl_job.website.user.email:
+                    await email_service.send_scan_failed(
+                        to_email=crawl_job.website.user.email,
+                        website_url=website_domain,
+                        error_message=str(e)
+                    )
+                    logger.info(f"📧 Sent failure email to {crawl_job.website.user.email}")
+            except Exception as email_error:
+                logger.error(f"Failed to send failure email: {email_error}")
+
         finally:
             await engine.dispose()
 
@@ -303,9 +347,10 @@ async def run_crawl_job(
     status_code=status.HTTP_201_CREATED,
     summary="Start a crawl job",
 )
+@limiter.limit("5/hour")  # 5 scans per hour per IP
 async def start_crawl(
+    request: Request,
     website_id: UUID,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user_clerk),
     db: AsyncSession = Depends(get_db),
 ) -> CrawlJob:
@@ -376,13 +421,11 @@ async def start_crawl(
     await db.commit()
     await db.refresh(crawl_job)
 
-    # Start crawl in background
-    background_tasks.add_task(
-        run_crawl_job,
-        crawl_job.id,
+    # Start crawl using Celery (async task processing)
+    process_crawl_job.delay(
+        str(crawl_job.id),
         website.domain,
-        max_pages,
-        settings.DATABASE_URL,
+        max_pages
     )
 
     return crawl_job

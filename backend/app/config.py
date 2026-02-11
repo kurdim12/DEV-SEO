@@ -36,8 +36,14 @@ class Settings(BaseSettings):
     REDIS_URL: str
     REDIS_CACHE_TTL: int = 3600  # 1 hour
 
-    # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    # CORS - Will be set dynamically based on DEBUG mode
+    CORS_ORIGINS_DEV: list[str] = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]
+    CORS_ORIGINS_PROD: list[str] = ["https://devseo.io", "https://www.devseo.io", "https://app.devseo.io"]
+
+    @property
+    def CORS_ORIGINS(self) -> list[str]:
+        """Get CORS origins based on DEBUG mode."""
+        return self.CORS_ORIGINS_DEV if self.DEBUG else self.CORS_ORIGINS_PROD
 
     # Stripe
     STRIPE_SECRET_KEY: Optional[str] = None
@@ -111,14 +117,6 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore"
     )
-
-    @field_validator("CORS_ORIGINS", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
-        """Parse CORS origins from comma-separated string or list."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
 
 
 # Global settings instance

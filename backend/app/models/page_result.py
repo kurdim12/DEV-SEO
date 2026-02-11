@@ -31,6 +31,8 @@ class PageResult(Base):
         schema_markup: Structured data (JSON)
         issues: Array of SEO issues found (JSON)
         seo_score: Overall SEO score (0-100)
+        readability_score: Flesch Reading Ease score (0-100, higher is easier)
+        readability_grade: Grade level assessment (e.g., "8th-9th grade")
         created_at: Result creation timestamp
     """
 
@@ -62,6 +64,11 @@ class PageResult(Base):
     schema_markup: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     issues: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     seo_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # Readability metrics
+    readability_score: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)
+    readability_grade: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

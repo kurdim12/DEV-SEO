@@ -10,10 +10,14 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.database import close_db, init_db
 from app.routers import auth
+from app.middleware.security import SecurityHeadersMiddleware
 
 
 # Initialize Sentry for error tracking (if configured)
@@ -49,6 +53,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await close_db()
 
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 # Create FastAPI application
 app = FastAPI(
     title=settings.APP_NAME,
@@ -58,6 +65,10 @@ app = FastAPI(
     redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan,
 )
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # Add CORS middleware
@@ -73,6 +84,9 @@ app.add_middleware(
 
 # Add GZip compression middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Add security headers middleware
+app.add_middleware(SecurityHeadersMiddleware, production=not settings.DEBUG)
 
 
 # Global exception handler
@@ -123,11 +137,12 @@ async def root() -> dict:
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 
 # Import additional routers
-from app.routers import websites, crawls, dashboard
+from app.routers import websites, crawls, dashboard, content
 
 app.include_router(websites.router, prefix=settings.API_V1_PREFIX)
 app.include_router(crawls.router, prefix=settings.API_V1_PREFIX)
 app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
+app.include_router(content.router, prefix=settings.API_V1_PREFIX)
 
 # Additional routers will be added here as we build them:
 # app.include_router(reports.router, prefix=settings.API_V1_PREFIX)

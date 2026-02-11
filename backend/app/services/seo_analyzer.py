@@ -5,16 +5,27 @@ import json
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import re
+import textstat
 
 
 class SEOIssue:
     """Represents a single SEO issue."""
 
-    def __init__(self, type: str, severity: str, message: str, suggestion: Optional[str] = None):
+    def __init__(
+        self,
+        type: str,
+        severity: str,
+        message: str,
+        suggestion: Optional[str] = None,
+        simple_message: Optional[str] = None,
+        simple_suggestion: Optional[str] = None
+    ):
         self.type = type
         self.severity = severity  # critical, warning, info
-        self.message = message
-        self.suggestion = suggestion
+        self.message = message  # Technical message
+        self.suggestion = suggestion  # Technical suggestion
+        self.simple_message = simple_message or message  # Plain English message
+        self.simple_suggestion = simple_suggestion or suggestion  # Plain English suggestion
 
     def to_dict(self) -> dict:
         return {
@@ -22,6 +33,8 @@ class SEOIssue:
             "severity": self.severity,
             "message": self.message,
             "suggestion": self.suggestion,
+            "simple_message": self.simple_message,
+            "simple_suggestion": self.simple_suggestion,
         }
 
 
@@ -49,6 +62,8 @@ class SEOAnalysisResult:
         self.images_without_alt: int = 0
         self.robots_meta: Optional[str] = None
         self.security_headers: Dict[str, bool] = {}
+        self.readability_score: Optional[float] = None
+        self.readability_grade: Optional[str] = None
         self.issues: List[SEOIssue] = []
         self.seo_score: int = 0
 
@@ -89,6 +104,8 @@ class SEOAnalyzer:
                     "critical",
                     "Page does not use HTTPS",
                     "Enable HTTPS/SSL for better security and SEO",
+                    simple_message="Your website isn't secure (no padlock icon)",
+                    simple_suggestion="Add an SSL certificate to protect your visitors and improve your Google ranking"
                 )
             )
 
@@ -143,6 +160,9 @@ class SEOAnalyzer:
         # Analyze favicon
         self._analyze_favicon(soup, result)
 
+        # Analyze readability (after content analysis)
+        self._analyze_readability(soup, result)
+
         # Calculate SEO score
         result.seo_score = self._calculate_score(result)
 
@@ -159,6 +179,8 @@ class SEOAnalyzer:
                     "critical",
                     "Page is missing a title tag",
                     "Add a descriptive title tag between 50-60 characters",
+                    simple_message="Your page doesn't have a title",
+                    simple_suggestion="Add a page title so Google knows what your page is about (aim for 50-60 characters)"
                 )
             )
             return
@@ -173,6 +195,8 @@ class SEOAnalyzer:
                     "warning",
                     f"Page title is only {len(title)} characters long",
                     "Aim for 50-60 characters for optimal SEO",
+                    simple_message=f"Your page title is too short ({len(title)} characters)",
+                    simple_suggestion="Make your title longer (50-60 characters works best) to describe your page better"
                 )
             )
         elif len(title) > 60:
@@ -182,6 +206,8 @@ class SEOAnalyzer:
                     "warning",
                     f"Page title is {len(title)} characters long (may be truncated)",
                     "Keep title under 60 characters to avoid truncation in search results",
+                    simple_message=f"Your page title is too long ({len(title)} characters)",
+                    simple_suggestion="Shorten your title to under 60 characters so it doesn't get cut off in Google search results"
                 )
             )
 
@@ -196,6 +222,8 @@ class SEOAnalyzer:
                     "warning",
                     "Page is missing a meta description",
                     "Add a meta description between 150-160 characters",
+                    simple_message="Your page doesn't have a description",
+                    simple_suggestion="Add a short description (150-160 characters) that appears under your title in Google search"
                 )
             )
             return
@@ -235,6 +263,8 @@ class SEOAnalyzer:
                     "critical",
                     "Page is missing an H1 heading",
                     "Add a single H1 heading that describes the page content",
+                    simple_message="Your page doesn't have a main heading",
+                    simple_suggestion="Add a large heading at the top that tells people what your page is about"
                 )
             )
         elif len(result.h1_tags) > 1:
@@ -244,6 +274,8 @@ class SEOAnalyzer:
                     "warning",
                     f"Page has {len(result.h1_tags)} H1 headings",
                     "Use only one H1 heading per page for better SEO",
+                    simple_message=f"Your page has {len(result.h1_tags)} main headings (should only have 1)",
+                    simple_suggestion="Keep only one main heading per page - use smaller headings (H2, H3) for other sections"
                 )
             )
 
@@ -282,6 +314,8 @@ class SEOAnalyzer:
                     "warning",
                     f"Page has only {result.word_count} words",
                     "Add more quality content (aim for at least 300 words)",
+                    simple_message=f"Your page is too short (only {result.word_count} words)",
+                    simple_suggestion="Add more helpful content - pages with 300+ words tend to rank better in Google"
                 )
             )
 
@@ -297,6 +331,8 @@ class SEOAnalyzer:
                     "critical",
                     "Page is missing viewport meta tag for mobile devices",
                     'Add <meta name="viewport" content="width=device-width, initial-scale=1">',
+                    simple_message="Your page won't display properly on mobile phones",
+                    simple_suggestion="Ask your developer to add mobile support - most visitors use phones nowadays"
                 )
             )
 
@@ -314,6 +350,8 @@ class SEOAnalyzer:
                     "warning",
                     f"{len(images_without_alt)} image(s) missing alt text",
                     "Add descriptive alt text to all images for accessibility and SEO",
+                    simple_message=f"{len(images_without_alt)} image(s) don't have descriptions",
+                    simple_suggestion="Add short descriptions to your images so Google and visually impaired users know what they show"
                 )
             )
 
@@ -423,6 +461,8 @@ class SEOAnalyzer:
                         "critical",
                         "Page has robots meta tag set to noindex",
                         "Remove noindex directive if you want this page to appear in search results",
+                        simple_message="Your page is hidden from Google",
+                        simple_suggestion="Remove the 'noindex' tag so your page can appear in search results"
                     )
                 )
 
@@ -511,6 +551,61 @@ class SEOAnalyzer:
                 )
             )
 
+    def _analyze_readability(self, soup: BeautifulSoup, result: SEOAnalysisResult):
+        """Analyze content readability using Flesch Reading Ease and grade level."""
+        # Get clean text content (already extracted in _analyze_content)
+        # Remove script and style elements
+        soup_copy = BeautifulSoup(str(soup), "html.parser")
+        for element in soup_copy(["script", "style", "noscript", "nav", "footer", "header"]):
+            element.decompose()
+
+        text = soup_copy.get_text()
+        # Clean up text
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = ' '.join(chunk for chunk in chunks if chunk)
+
+        # Skip if content is too short
+        if len(text.split()) < 30:
+            return
+
+        try:
+            # Calculate Flesch Reading Ease score (0-100, higher = easier)
+            readability_score = textstat.flesch_reading_ease(text)
+            result.readability_score = round(readability_score, 1)
+
+            # Get grade level
+            result.readability_grade = textstat.text_standard(text, float_output=False)
+
+            # Add issue if readability is too difficult
+            if readability_score < 30:
+                result.issues.append(
+                    SEOIssue(
+                        "very_poor_readability",
+                        "critical",
+                        f"Content is very difficult to read (score: {result.readability_score})",
+                        "Content requires college-level reading ability. Simplify significantly for broader audience reach",
+                        simple_message="Your content is very hard to read",
+                        simple_suggestion="Use simpler words and shorter sentences so more people can understand your content"
+                    )
+                )
+            elif readability_score < 50:
+                result.issues.append(
+                    SEOIssue(
+                        "poor_readability",
+                        "warning",
+                        f"Content readability is low (score: {result.readability_score})",
+                        "Simplify language, use shorter sentences, and break up complex paragraphs for better readability",
+                        simple_message="Your content is a bit hard to read",
+                        simple_suggestion="Use shorter sentences and simpler words to make your content easier to understand"
+                    )
+                )
+
+        except Exception as e:
+            # Readability calculation can fail on some content
+            # Don't fail the entire analysis, just skip readability
+            pass
+
     def _calculate_score(self, result: SEOAnalysisResult) -> int:
         """
         Calculate overall SEO score (0-100).
@@ -553,6 +648,13 @@ class SEOAnalyzer:
 
         if result.canonical_url:
             score += 2
+
+        # Bonus for good readability
+        if result.readability_score:
+            if result.readability_score >= 60:
+                score += 3  # Easy to read
+            elif result.readability_score >= 50:
+                score += 1  # Fairly easy to read
 
         # Ensure score is in valid range
         return max(0, min(100, score))

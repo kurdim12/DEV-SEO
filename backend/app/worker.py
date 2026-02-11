@@ -93,6 +93,8 @@ class CrawlWorker:
                         canonical_url=analysis.canonical_url,
                         og_tags=analysis.og_tags,
                         schema_markup=analysis.schema_markup,
+                        readability_score=analysis.readability_score,
+                        readability_grade=analysis.readability_grade,
                         issues=[issue.to_dict() for issue in analysis.issues],
                         seo_score=analysis.seo_score,
                     )

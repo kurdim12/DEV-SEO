@@ -22,6 +22,7 @@ from app.schemas.website import (
     WebsiteVerifyRequest,
     WebsiteVerifyResponse,
 )
+from app.services.verification_service import verification_service
 
 router = APIRouter(prefix="/websites", tags=["Websites"])
 
@@ -279,17 +280,34 @@ async def verify_website(
     # Set verification method
     website.verification_method = verify_request.method
 
-    # For now, just return instructions (actual verification would be implemented in a service)
-    instructions = {
-        "dns": f"Add the following TXT record to your DNS:\n\nName: _devseo-verification\nValue: {website.verification_token}",
-        "meta_tag": f'Add this meta tag to your homepage <head>:\n\n<meta name="devseo-verification" content="{website.verification_token}">',
-        "file": f"Create a file at https://{website.domain}/.well-known/devseo-verification.txt with content:\n\n{website.verification_token}",
-    }
-
-    await db.commit()
-
-    return WebsiteVerifyResponse(
-        verified=False,
-        message="Verification pending",
-        instructions=instructions.get(verify_request.method),
+    # Attempt actual verification
+    verified, message = await verification_service.verify_domain(
+        url=website.url,
+        token=website.verification_token,
+        method=verify_request.method
     )
+
+    if verified:
+        website.verified = True
+        website.verified_at = func.now()
+        await db.commit()
+
+        return WebsiteVerifyResponse(
+            verified=True,
+            message=message,
+        )
+    else:
+        # Return instructions if verification failed
+        instructions = {
+            "dns": f"Add the following TXT record to your DNS:\n\nName: _devseo-verify.{website.domain} or root domain\nValue: {website.verification_token}",
+            "meta_tag": f'Add this meta tag to your homepage <head>:\n\n<meta name="devseo-verification" content="{website.verification_token}">',
+            "file": f"Create a file at https://{website.domain}/.well-known/devseo-verify.txt with content:\n\n{website.verification_token}",
+        }
+
+        await db.commit()
+
+        return WebsiteVerifyResponse(
+            verified=False,
+            message=message,
+            instructions=instructions.get(verify_request.method),
+        )

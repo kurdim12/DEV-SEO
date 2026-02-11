@@ -21,7 +21,7 @@ redis==5.2.0
 hiredis==3.0.0
 
 # Celery for background tasks
-celery==5.4.0
+celery==5.6.2
 kombu==5.4.2
 
 # HTTP Client
@@ -34,7 +34,7 @@ html5lib==1.1
 
 # PDF Generation
 reportlab==4.2.5
-weasyprint==62.3
+weasyprint==68.1
 
 # External APIs
 anthropic==0.39.0
@@ -58,3 +58,10 @@ ruff==0.8.2
 
 # Monitoring
 sentry-sdk[fastapi]==2.18.0
+
+# New dependencies for enhanced features
+dnspython==2.8.0          # DNS verification
+pyarabic==0.6.15          # Arabic NLP
+textstat==0.7.12          # Readability scoring
+openai==1.59.7            # Future AI features
+slowapi==0.1.9            # Rate limiting
